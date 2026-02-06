@@ -29,10 +29,13 @@ jobs:
       - name: Build test APK
         run: ./gradlew ${{ inputs.module }}:${{ inputs.variant }} --stacktrace
 
+      - name: Sanitize ref name
+        run: echo "REF_SAFE=${GITHUB_REF_NAME//\//-}" >> $GITHUB_ENV
+
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apk-${{ github.ref_name }}-${{ inputs.variant }}
+          name: apk-${{ env.REF_SAFE }}-${{ inputs.variant }}
           path: |
             **/build/outputs/apk/**/*.apk
           if-no-files-found: error
