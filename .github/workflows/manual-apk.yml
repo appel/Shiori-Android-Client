@@ -1,29 +1,26 @@
-name: Manual APK Build
+name: Manual APK Build (Prerelease)
 
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Branch or tag to build"
-        required: true
-        default: "master"
-      variant:
-        description: "Gradle assemble task (e.g. assembleDebug, assembleProductionDebug, assembleProductionRelease)"
-        required: true
-        default: "assembleDebug"
       module:
-        description: "Gradle module to build (use :presentation if your APK lives there)"
+        description: "Gradle module (e.g. :presentation)"
         required: true
         default: ":presentation"
+      task:
+        description: "Gradle task (e.g. assembleProductionDebug, assembleStagingDebug)"
+        required: true
+        default: "assembleProductionDebug"
 
 jobs:
-  build_apk:
+  build_and_prerelease:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create releases + upload assets
+
     steps:
-      - name: Checkout selected ref
+      - name: Checkout selected branch
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -35,21 +32,36 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build test APK
-        run: ./gradlew ${{ inputs.module }}:${{ inputs.variant }} --stacktrace
+      - name: Build APK
+        run: ./gradlew ${{ inputs.module }}:${{ inputs.task }} --stacktrace
 
-      - name: Sanitize ref name
+      # Find ONE apk and expose its path/name
+      - name: Locate productionDebug APK
         shell: bash
         run: |
-          REF_SAFE="${{ inputs.ref }}"
-          REF_SAFE="${REF_SAFE//\//-}"
-          REF_SAFE="${REF_SAFE//\\/-}"
-          echo "REF_SAFE=$REF_SAFE" >> $GITHUB_ENV
+          set -euo pipefail
+          APK_PATH="$(ls -1 presentation/build/outputs/apk/production/debug/*.apk | head -n 1)"
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          echo "Found APK: $APK_PATH"
 
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
+      # Clean branch name for tag/title
+      - name: Compute release names
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_REF_NAME}"
+          SAFE_BRANCH="${BRANCH//\//-}"
+          echo "SAFE_BRANCH=$SAFE_BRANCH" >> $GITHUB_ENV
+          echo "TAG=test-${SAFE_BRANCH}-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "RELNAME=Test APK (${SAFE_BRANCH}) #${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+
+      - name: Create prerelease and attach APK
+        uses: softprops/action-gh-release@v2
         with:
-          name: apk-${{ env.REF_SAFE }}-${{ inputs.variant }}
-          path: |
-            **/build/outputs/apk/**/*.apk
-          if-no-files-found: error
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.RELNAME }}
+          prerelease: true
+          files: ${{ env.APK_PATH }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
