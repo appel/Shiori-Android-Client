@@ -1,0 +1,38 @@
+name: Manual APK Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Gradle assemble task (e.g. assembleDebug, assembleProductionDebug, assembleProductionRelease)"
+        required: true
+        default: "assembleDebug"
+      module:
+        description: "Gradle module to build (use :presentation if your APK lives there)"
+        required: true
+        default: ":presentation"
+
+jobs:
+  build_apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Build APK
+        run: ./gradlew ${{ inputs.module }}:${{ inputs.variant }} --stacktrace
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ github.ref_name }}-${{ inputs.variant }}
+          path: |
+            **/build/outputs/apk/**/*.apk
+          if-no-files-found: error
