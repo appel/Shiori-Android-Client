@@ -3,12 +3,16 @@ name: Manual APK Build (Prerelease)
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: "Branch or tag to build (e.g. fix/login)"
+        required: true
+        default: "master"
       module:
         description: "Gradle module (e.g. :presentation)"
         required: true
         default: ":presentation"
       task:
-        description: "Gradle task (e.g. assembleProductionDebug, assembleStagingDebug)"
+        description: "Gradle task (single variant recommended)"
         required: true
         default: "assembleProductionDebug"
 
@@ -16,11 +20,13 @@ jobs:
   build_and_prerelease:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to create releases + upload assets
+      contents: write
 
     steps:
-      - name: Checkout selected branch
+      - name: Checkout code to build
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -35,7 +41,6 @@ jobs:
       - name: Build APK
         run: ./gradlew ${{ inputs.module }}:${{ inputs.task }} --stacktrace
 
-      # Find ONE apk and expose its path/name
       - name: Locate productionDebug APK
         shell: bash
         run: |
@@ -44,16 +49,18 @@ jobs:
           echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
           echo "Found APK: $APK_PATH"
 
-      # Clean branch name for tag/title
-      - name: Compute release names
+      - name: Compute release metadata
         shell: bash
         run: |
           set -euo pipefail
-          BRANCH="${GITHUB_REF_NAME}"
-          SAFE_BRANCH="${BRANCH//\//-}"
-          echo "SAFE_BRANCH=$SAFE_BRANCH" >> $GITHUB_ENV
-          echo "TAG=test-${SAFE_BRANCH}-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
-          echo "RELNAME=Test APK (${SAFE_BRANCH}) #${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          REF="${{ inputs.ref }}"
+          SAFE_REF="${REF//\//-}"
+          SAFE_REF="${SAFE_REF//\\/-}"
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          echo "SAFE_REF=$SAFE_REF" >> $GITHUB_ENV
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          echo "TAG=test-${SAFE_REF}-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "RELNAME=Test APK (${SAFE_REF}) #${GITHUB_RUN_NUMBER} (${SHORT_SHA})" >> $GITHUB_ENV
 
       - name: Create prerelease and attach APK
         uses: softprops/action-gh-release@v2
@@ -61,7 +68,10 @@ jobs:
           tag_name: ${{ env.TAG }}
           name: ${{ env.RELNAME }}
           prerelease: true
+          body: |
+            Built from ref: ${{ inputs.ref }}
+            Commit: ${{ env.SHORT_SHA }}
+            Task: ${{ inputs.task }}
           files: ${{ env.APK_PATH }}
-          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
