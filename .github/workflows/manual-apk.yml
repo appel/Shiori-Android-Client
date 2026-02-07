@@ -3,10 +3,6 @@ name: Manual APK Build (Prerelease)
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Branch or tag to build (e.g. fix/login)"
-        required: true
-        default: "master"
       module:
         description: "Gradle module (e.g. :presentation)"
         required: true
@@ -25,8 +21,6 @@ jobs:
     steps:
       - name: Checkout code to build
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -53,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REF="${{ inputs.ref }}"
+          REF="${{ github.ref_name }}"
           SAFE_REF="${REF//\//-}"
           SAFE_REF="${SAFE_REF//\\/-}"
           SHORT_SHA="$(git rev-parse --short HEAD)"
@@ -69,7 +63,7 @@ jobs:
           name: ${{ env.RELNAME }}
           prerelease: true
           body: |
-            Built from ref: ${{ inputs.ref }}
+            Built from ref: ${{ github.ref_name }}
             Commit: ${{ env.SHORT_SHA }}
             Task: ${{ inputs.task }}
           files: ${{ env.APK_PATH }}
