@@ -262,7 +262,7 @@ class FeedViewModel(
             _bookmarksUiState.error(errorMessage = SESSION_HAS_BEEN_EXPIRED)
         } else {
             Log.e(TAG, "Unhandled exception: ${error.message}")
-            //_bookmarksUiState.error(errorMessage = "Unhandled exception: ${error.message}")
+            _bookmarksUiState.error(errorMessage = "Unhandled exception: ${error.message}")
         }
     }
 
