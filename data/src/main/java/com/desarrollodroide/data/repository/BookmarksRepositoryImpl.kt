@@ -185,9 +185,13 @@ class BookmarksRepositoryImpl(
                     url = "${serverUrl.removeTrailingSlash()}/api/bookmarks?page=$currentPage"
                 )
                 Log.d(TAG, "Received response for page $currentPage with status: ${bookmarksDto.code()}")
-                if (bookmarksDto.errorBody()?.string() == SESSION_HAS_BEEN_EXPIRED) {
-                    Log.e(TAG, "Session has expired")
-                    emit(SyncStatus.Error(Result.ErrorType.SessionExpired(message = SESSION_HAS_BEEN_EXPIRED)))
+                if (!bookmarksDto.isSuccessful){
+                    Log.e(TAG, "Error syncing bookmarks: ${bookmarksDto.errorBody()?.string()}")
+                    if (bookmarksDto.code() == 401 || bookmarksDto.errorBody()?.string() == SESSION_HAS_BEEN_EXPIRED) {
+                        emit(SyncStatus.Error(Result.ErrorType.SessionExpired(message = SESSION_HAS_BEEN_EXPIRED)))
+                    } else {
+                        emit(SyncStatus.Error(Result.ErrorType.HttpError(statusCode = bookmarksDto.code(), message = bookmarksDto.message())))
+                    }
                     return@flow
                 }
                 val bookmarks = bookmarksDto.body()?.bookmarks?.map { it.toEntityModel() } ?: emptyList()
